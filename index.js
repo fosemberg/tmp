@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         pre-fill for forms.yandex.ru
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      3.0
 // @description  try to take over the world!
 // @author       You
 // @match        https://forms.yandex.ru/surveys/*
@@ -125,9 +125,37 @@
     return true;
   }
 
-  function sleep(ms) {
+  function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+
+  async function waitForCondition(
+    condition,
+    timeout,
+    throwError = false,
+) {
+  let stopChecking = false;
+
+  return Promise.race([
+    new Promise(async (resolve) => {
+      while (!condition() && !stopChecking) {
+        await wait(100);
+      }
+
+      resolve();
+    }),
+    new Promise((resolve, reject) => {
+      window.setTimeout(() => {
+        stopChecking = true;
+        if (throwError) {
+          reject(new Error(`Wait for condition reached timeout of ${timeout}`));
+        } else {
+          resolve();
+        }
+      }, timeout);
+    }),
+  ]);
+};
 
   function randomIntFromInterval(min, max) { // min and max included
     return Math.floor(Math.random() * (max - min + 1) + min)
@@ -237,21 +265,19 @@
   const answerQuestions = async () => {
     console.log('answerQuestions');
     for (const {question, answer} of qas) {
-      await sleep(randomIntFromInterval(10, 100));
+      await wait(randomIntFromInterval(10, 100));
       answerQuestion(question, answer);
     }
   }
 
-  let answerTheQuestionsTimeout = 0;
+  await waitForCondition(checkIsWelcomePage, 5_000);
   if (checkIsWelcomePage()) {
-    await sleep(answerTheQuestionsTimeout);
     getIsTripOkButton()?.click();
-    await sleep(100);
+    await waitForCondition(getWelcomeButton, 2_000);
     getWelcomeButton()?.click();
-    answerTheQuestionsTimeout = 500;
   }
 
-  await sleep(answerTheQuestionsTimeout);
+  await wait(500);
   await answerQuestions();
 
   // business logic }
